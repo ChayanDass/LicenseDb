@@ -252,7 +252,7 @@ type LicenseError struct {
 // User struct is representation of user information.
 type User struct {
 	Id           int64   `json:"id" gorm:"primary_key" example:"123"`
-	Username     *string `json:"username" gorm:"unique;not null" example:"fossy"`
+	Username     *string `json:"user_name" gorm:"unique;not null" example:"fossy"`
 	DisplayName  *string `json:"display_name" gorm:"not null" example:"fossy"`
 	UserEmail    *string `json:"user_email" gorm:"unique;not null" example:"fossy@org.com"`
 	Userlevel    *string `json:"user_level" gorm:"not null" example:"USER"`
@@ -297,7 +297,7 @@ func (u *User) BeforeUpdate(tx *gorm.DB) (err error) {
 
 type UserCreate struct {
 	Id           int64   `json:"-"`
-	Username     *string `json:"username" validate:"required" example:"fossy"`
+	Username     *string `json:"user_name" validate:"required" example:"fossy"`
 	DisplayName  *string `json:"display_name" validate:"required" example:"fossy"`
 	UserEmail    *string `json:"user_email" validate:"required,email" example:"fossy@org.com"`
 	Userlevel    *string `json:"user_level" validate:"required,oneof=USER ADMIN" example:"ADMIN"`
@@ -307,7 +307,7 @@ type UserCreate struct {
 
 type UserUpdate struct {
 	Id           int64   `json:"-"`
-	Username     *string `json:"username" example:"fossy"`
+	Username     *string `json:"user_name" example:"fossy"`
 	DisplayName  *string `json:"display_name" example:"fossy"`
 	UserEmail    *string `json:"user_email" validate:"omitempty,email"`
 	Userlevel    *string `json:"user_level" validate:"omitempty,oneof=USER ADMIN" example:"ADMIN"`
@@ -351,7 +351,7 @@ type Audit struct {
 	UserId     int64       `json:"user_id" example:"123"`
 	User       User        `gorm:"foreignKey:UserId;references:Id" json:"user"`
 	Timestamp  time.Time   `json:"timestamp" example:"2023-12-01T18:10:25.00+05:30"`
-	Type       string      `json:"type" enums:"obligation,license" example:"license"`
+	Type       string      `json:"type" enums:"obligation,license,user" example:"license"`
 	TypeId     int64       `json:"type_id" example:"34"`
 	Entity     interface{} `json:"entity" gorm:"-" swaggertype:"object"`
 	ChangeLogs []ChangeLog `json:"-"`

@@ -768,3 +768,89 @@ func AddChangelogsForLicenseUpdate(tx *gorm.DB, username string,
 
 	return nil
 }
+
+func AddChangelogsForUserUpdate(tx *gorm.DB, username string,
+	newUser, oldUser *models.User) error {
+	var changes []models.ChangeLog
+	if oldUser.Username != nil && newUser.Username != nil && *oldUser.Username != *newUser.Username {
+		changes = append(changes, models.ChangeLog{
+			Field:        "Username",
+			OldValue:     oldUser.Username,
+			UpdatedValue: newUser.Username,
+		})
+	}
+	if oldUser.DisplayName != nil && newUser.DisplayName != nil && *oldUser.DisplayName != *newUser.DisplayName {
+		changes = append(changes, models.ChangeLog{
+			Field:        "Displayname",
+			OldValue:     oldUser.DisplayName,
+			UpdatedValue: newUser.DisplayName,
+		})
+	}
+
+	if oldUser.UserEmail != nil && newUser.UserEmail != nil && *oldUser.UserEmail != *newUser.UserEmail {
+		changes = append(changes, models.ChangeLog{
+			Field:        "Useremail",
+			OldValue:     oldUser.UserEmail,
+			UpdatedValue: newUser.UserEmail,
+		})
+	}
+	if oldUser.Userlevel != nil && newUser.Userlevel != nil && *oldUser.Userlevel != *newUser.Userlevel {
+		changes = append(changes, models.ChangeLog{
+			Field:        "Userlevel",
+			OldValue:     oldUser.Userlevel,
+			UpdatedValue: newUser.Userlevel,
+		})
+	}
+	if oldUser.Userpassword != nil && newUser.Userpassword != nil && *oldUser.Userpassword != *newUser.Userpassword {
+		masked := "********"
+		changes = append(changes, models.ChangeLog{
+			Field:        "Userpassword",
+			OldValue:     &masked,
+			UpdatedValue: &masked,
+		})
+	}
+
+	if oldUser.Active != nil && newUser.Active != nil {
+		if *oldUser.Active != *newUser.Active {
+			oldVal := fmt.Sprintf("%v", *oldUser.Active)
+			newVal := fmt.Sprintf("%v", *newUser.Active)
+
+			changes = append(changes, models.ChangeLog{
+				Field:        "Status",
+				OldValue:     &oldVal,
+				UpdatedValue: &newVal,
+			})
+		}
+	} else if oldUser.Active != newUser.Active {
+		// One is nil, the other is not
+		oldVal := fmt.Sprintf("%v", oldUser.Active)
+		newVal := fmt.Sprintf("%v", newUser.Active)
+
+		changes = append(changes, models.ChangeLog{
+			Field:        "Status",
+			OldValue:     &oldVal,
+			UpdatedValue: &newVal,
+		})
+	}
+
+	if len(changes) != 0 {
+		var user models.User
+		if err := tx.Where(models.User{Id: oldUser.Id}).First(&user).Error; err != nil {
+			return err
+		}
+
+		audit := models.Audit{
+			UserId:     user.Id,
+			TypeId:     newUser.Id,
+			Timestamp:  time.Now(),
+			Type:       "user",
+			ChangeLogs: changes,
+		}
+
+		if err := tx.Create(&audit).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
