@@ -103,6 +103,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 				return
 			}
 			c.Set("username", *user.UserName)
+			c.Set("useremail", *user.UserEmail)
 			c.Set("role", *user.UserLevel)
 		} else if iss == os.Getenv("OIDC_ISSUER") {
 			if auth.Jwks == nil || os.Getenv("OIDC_USERNAME_KEY") == "" {

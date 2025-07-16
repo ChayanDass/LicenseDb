@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/fossology/LicenseDb/pkg/db"
+	"github.com/fossology/LicenseDb/pkg/email"
 	"github.com/fossology/LicenseDb/pkg/models"
 	"github.com/fossology/LicenseDb/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -351,6 +352,14 @@ func CreateLicense(c *gin.Context) {
 			return err
 		}
 
+		// insert the email to licenseEmail queue
+		go email.Email.QueueLicenseEmail(email.LicenseJob{
+			UserName:    username,
+			UserEmail:   *input.User.UserEmail,
+			Action:      "Created",
+			LicenseName: *input.Shortname,
+		})
+
 		res := models.LicenseResponse{
 			Data:   []models.LicenseDB{input},
 			Status: http.StatusCreated,
@@ -391,6 +400,7 @@ func UpdateLicense(c *gin.Context) {
 		var oldLicense models.LicenseDB
 
 		username := c.GetString("username")
+		useremail := c.GetString("useremail")
 
 		shortname := c.Param("shortname")
 		if err := tx.Where(models.LicenseDB{Shortname: &shortname}).First(&oldLicense).Error; err != nil {
@@ -478,7 +488,7 @@ func UpdateLicense(c *gin.Context) {
 		newLicense := models.LicenseDB(updates)
 
 		// Update all other fields except external_ref and rf_shortname
-		if err := tx.Model(&newLicense).Omit("external_ref", "rf_shortname", "Obligations").Clauses(clause.Returning{}).Where(models.LicenseDB{Id: oldLicense.Id}).Updates(newLicense).Error; err != nil {
+		if err := tx.Model(&newLicense).Omit("external_ref", "rf_shortname", "Obligations").Clauses(clause.Returning{}).Where(models.LicenseDB{Id: oldLicense.Id}).Updates(newLicense).Preload("User").Error; err != nil {
 			er := models.LicenseError{
 				Status:    http.StatusInternalServerError,
 				Message:   "Failed to update license",
@@ -501,6 +511,14 @@ func UpdateLicense(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, er)
 			return err
 		}
+
+		fmt.Print(oldLicense.User.UserName)
+		go email.Email.QueueLicenseEmail(email.LicenseJob{
+			UserName:    username,
+			UserEmail:   useremail,
+			Action:      "Updated",
+			LicenseName: *oldLicense.Shortname,
+		})
 
 		res := models.LicenseResponse{
 			Data:   []models.LicenseDB{newLicense},

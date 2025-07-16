@@ -4,16 +4,9 @@
 
 set -e
 
-db_host="${DB_HOST:-localhost}"
-db_port="${DB_PORT:-5432}"
-db_name="${DB_NAME:-licensedb}"
-db_user="${DB_USER:-fossy}"
-db_password="${DB_PASSWORD:-fossy}"
 populate_db="${POPULATE_DB:-true}"
 data_file="/app/licenseRef.json"
 
-printf "READ_API_AUTHENTICATION_ENABLED=false\nTOKEN_HOUR_LIFESPAN=24\nAPI_SECRET=%s\n" $(openssl rand -hex 32) > /app/.env
-
-/app/laas -host=$db_host -port=$db_port -user=$db_user -dbname=$db_name \
-  -password=$db_password -datafile="$data_file" -populatedb=$populate_db
-
+printf "READ_API_AUTHENTICATION_ENABLED=false\nTOKEN_HOUR_LIFESPAN=24\nAPI_SECRET=%s\nDEFAULT_ISSUER=www.licensedb.com\n" "$(openssl rand -hex 32)" > /app/.env
+/app/init.sh
+exec /app/laas -datafile="$data_file" -populatedb=$populate_db

@@ -22,17 +22,19 @@ FROM alpine:3.20 AS build-release
 WORKDIR /app
 
 COPY entrypoint.sh /app/entrypoint.sh
+COPY scripts/init.sh /app/init.sh
+COPY pkg/db/migrations migrations
 
-RUN apk add --no-cache openssl bash libc6-compat \
+RUN apk add --no-cache openssl bash libc6-compat curl postgresql-client \
     && addgroup -S noroot \
     && adduser -S noroot -G noroot
 
 COPY --from=build /LicenseDb/licenseRef.json /app/licenseRef.json
 COPY --from=build /LicenseDb/laas /app/laas
-
 EXPOSE 8080
 
 RUN chmod +rx /app/entrypoint.sh \
+    && chmod +rx /app/init.sh \ 
     && touch /app/.env \
     && chown --recursive noroot:noroot /app
 

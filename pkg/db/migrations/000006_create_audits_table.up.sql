@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS audits (
     user_id BIGINT,
     timestamp TIMESTAMPTZ,
     type TEXT,
+    action TEXT DEFAULT 'UPDATE',
     type_id BIGINT,
     CONSTRAINT fk_audits_user FOREIGN KEY (user_id) REFERENCES users(id)
 );

@@ -30,6 +30,7 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"github.com/fossology/LicenseDb/pkg/db"
+	"github.com/fossology/LicenseDb/pkg/email"
 	"github.com/fossology/LicenseDb/pkg/models"
 )
 
@@ -592,11 +593,35 @@ func Populatedb(datafile string) {
 	if err := db.DB.Where(&models.User{UserLevel: &level}).First(&user).Error; err != nil {
 		log.Fatalf("Failed to find a super admin")
 	}
+	var total, success, failed int
 
 	for _, license := range licenses {
+		total++
 		result := Converter(license)
-		_, _ = InsertOrUpdateLicenseOnImport(&result, &models.UpdateExternalRefsJSONPayload{ExternalRef: make(map[string]interface{})}, *user.UserName)
+
+		_, status := InsertOrUpdateLicenseOnImport(
+			&result,
+			&models.UpdateExternalRefsJSONPayload{ExternalRef: make(map[string]interface{})},
+			*user.UserName,
+		)
+
+		if status == IMPORT_LICENSE_CREATED ||
+			status == IMPORT_LICENSE_UPDATED ||
+			status == IMPORT_LICENSE_UPDATED_EXCEPT_TEXT {
+			success++
+		} else {
+			failed++
+		}
 	}
+	go email.Email.QueueBulkInsertEmail(email.BulkInsertJob{
+		UserName:  *user.UserName,
+		UserEmail: *user.UserEmail,
+		Type:      "license",
+		Total:     total,
+		Success:   success,
+		Failed:    failed,
+		Timestamp: time.Now(),
+	})
 
 	DEFAULT_OBLIGATION_TYPES := []*models.ObligationType{
 		{Type: "OBLIGATION"},
