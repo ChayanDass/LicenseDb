@@ -709,8 +709,8 @@ func ImportLicenses(c *gin.Context) {
 
 		if importStatus == utils.IMPORT_FAILED {
 			erroredLicense := ""
-			if licenses[i].Shortname != nil {
-				erroredLicense = *licenses[i].Shortname
+			if license.Shortname != "" {
+				erroredLicense = license.Shortname
 			}
 			res.Data = append(res.Data, models.LicenseError{
 				Status:    http.StatusInternalServerError,
