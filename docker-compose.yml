@@ -6,18 +6,38 @@ services:
     build:
       context: .
     environment:
-      DB_PASSWORD: fossy
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: fossy
-      DB_NAME: licensedb
-      POPULATE_DB: true
-      GIN_MODE: debug
+      # Database configuration
+      - DB_PASSWORD=fossy
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=fossy
+      - DB_NAME=licensedb
+
+      # Application configuration
+      - PORT=${PORT:-8080}
+      - POPULATE_DB=${POPULATE_DB:-true}
+      - GIN_MODE=${GIN_MODE:-debug}
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.8}
+      - DEFAULT_ISSUER=${DEFAULT_ISSUER:-https://licensedb.dev}
+
+      # OIDC configuration
+      - JWKS_URI=${JWKS_URI:-https://provider/keys}
+      - OIDC_USERNAME_KEY=${OIDC_USERNAME_KEY:-employee_id}
+      - OIDC_EMAIL_KEY=${OIDC_EMAIL_KEY:-mail}
+      - OIDC_ISSUER=${OIDC_ISSUER:-https://provider}
+      - OIDC_DISPLAYNAME_KEY=${OIDC_DISPLAYNAME_KEY:-https://licensedb.dev/display_name}
+      - OIDC_SIGNING_ALG=${OIDC_SIGNING_ALG:-RS256}
     ports:
       - 8080:8080
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
     restart: always
     networks:
       - licensedb-network
