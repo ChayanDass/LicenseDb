@@ -9,6 +9,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,12 +21,14 @@ import (
 	"time"
 
 	"github.com/fossology/LicenseDb/pkg/db"
+	email "github.com/fossology/LicenseDb/pkg/email"
+	template "github.com/fossology/LicenseDb/pkg/email/templetes"
+	logger "github.com/fossology/LicenseDb/pkg/log"
 	"github.com/fossology/LicenseDb/pkg/models"
 	"github.com/fossology/LicenseDb/pkg/utils"
 	"github.com/fossology/LicenseDb/pkg/validations"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-
 	"gorm.io/gorm"
 )
 
@@ -308,7 +311,15 @@ func CreateLicense(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, er)
 			return err
 		}
-
+		// send email
+		if email.Email != nil && email.Email.IsRunning() {
+			userName := *lic.User.UserName
+			userEmail := *lic.User.UserEmail
+			shortName := *lic.Shortname
+			email.NotifyLicenseCreated(userEmail, userName, shortName)
+		} else {
+			logger.LogInfo("SMTP disabled or not reachable. Skipping email.")
+		}
 		res := models.LicenseResponse{
 			Data:   []models.LicenseResponseDTO{lic.ConvertToLicenseResponseDTO()},
 			Status: http.StatusCreated,
@@ -321,6 +332,7 @@ func CreateLicense(c *gin.Context) {
 
 		return nil
 	})
+
 }
 
 // UpdateLicense Update license with given shortname and create audit and changelog entries.
@@ -451,6 +463,14 @@ func UpdateLicense(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, er)
 			return err
 		}
+		if email.Email != nil && email.Email.IsRunning() {
+			userName := *newLicense.User.UserName
+			userEmail := *newLicense.User.UserEmail
+			shortName := *newLicense.Shortname
+			email.NotifyLicenseUpdated(userEmail, userName, shortName)
+		} else {
+			logger.LogInfo("SMTP disabled or not reachable. Skipping email.")
+		}
 
 		res := models.LicenseResponse{
 			Data:   []models.LicenseResponseDTO{newLicense.ConvertToLicenseResponseDTO()},
@@ -573,6 +593,7 @@ func SearchInLicense(c *gin.Context) {
 //	@Router			/licenses/import [post]
 func ImportLicenses(c *gin.Context) {
 	userId := c.MustGet("userId").(int64)
+	var user models.User
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		er := models.LicenseError{
@@ -641,8 +662,21 @@ func ImportLicenses(c *gin.Context) {
 	res := models.ImportLicensesResponse{
 		Status: http.StatusOK,
 	}
-
+	var total, success, failed int
+	err = db.DB.Where(models.User{Id: userId}).First(&user).Error
+	if err != nil {
+		er := models.LicenseError{
+			Status:    http.StatusNotFound,
+			Message:   fmt.Sprintf("no with userId '%d' exists", userId),
+			Error:     err.Error(),
+			Path:      c.Request.URL.Path,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		c.JSON(http.StatusNotFound, er)
+		return
+	}
 	for i := range licenses {
+		total++
 		lic, err := licenses[i].ConvertToLicenseDB()
 		if err != nil {
 			res.Data = append(res.Data, models.LicenseError{
@@ -683,6 +717,37 @@ func ImportLicenses(c *gin.Context) {
 			})
 			// error is not returned here as it will rollback the transaction
 		}
+		if importStatus == utils.IMPORT_LICENSE_CREATED ||
+			importStatus == utils.IMPORT_LICENSE_UPDATED ||
+			importStatus == utils.IMPORT_LICENSE_UPDATED_EXCEPT_TEXT {
+			success++
+		} else {
+			failed++
+		}
+	}
+	if email.Email != nil && email.Email.IsRunning() {
+		userName := *user.UserName
+		userEmail := *user.UserEmail
+		subject, html := template.ImportSummaryEmailTemplate(
+			userName,
+			"Licenses",
+			total,
+			success,
+			failed,
+			time.Now(),
+		)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+		defer cancel()
+
+		if err := email.Email.Queue(ctx, email.EmailData{
+			To:      []string{userEmail},
+			Subject: subject,
+			HTML:    html,
+		}); err != nil {
+			logger.LogError("Failed to enqueue email")
+		}
+	} else {
+		logger.LogInfo("SMTP disabled or not reachable. Skipping email.")
 	}
 
 	c.JSON(http.StatusOK, res)
