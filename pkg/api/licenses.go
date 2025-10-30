@@ -9,7 +9,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +21,6 @@ import (
 
 	"github.com/fossology/LicenseDb/pkg/db"
 	email "github.com/fossology/LicenseDb/pkg/email"
-	template "github.com/fossology/LicenseDb/pkg/email/templetes"
 	logger "github.com/fossology/LicenseDb/pkg/log"
 	"github.com/fossology/LicenseDb/pkg/models"
 	"github.com/fossology/LicenseDb/pkg/utils"
@@ -728,24 +726,7 @@ func ImportLicenses(c *gin.Context) {
 	if email.Email != nil && email.Email.IsRunning() {
 		userName := *user.UserName
 		userEmail := *user.UserEmail
-		subject, html := template.ImportSummaryEmailTemplate(
-			userName,
-			"Licenses",
-			total,
-			success,
-			failed,
-			time.Now(),
-		)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-		defer cancel()
-
-		if err := email.Email.Queue(ctx, email.EmailData{
-			To:      []string{userEmail},
-			Subject: subject,
-			HTML:    html,
-		}); err != nil {
-			logger.LogError("Failed to enqueue email")
-		}
+		email.NotifyImportSummary(userEmail, userName, "Licenses", total, success, failed)
 	} else {
 		logger.LogInfo("SMTP disabled or not reachable. Skipping email.")
 	}
